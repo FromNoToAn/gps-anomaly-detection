@@ -1,0 +1,7 @@
+# VKR — обучение LSTM ETA и препроцессинг
+torch>=2.0
+pytorch-lightning>=2.0
+tensorboard>=2.14
+PyYAML>=6.0
+pandas>=1.5
+numpy>=1.23

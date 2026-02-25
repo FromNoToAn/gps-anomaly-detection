@@ -31,8 +31,7 @@ VKR/
 │   └── anomaly.py           # Флаг аномалии: |pred_ETA − actual_ETA| > порог (120 сек)
 ├── run_preprocess.py        # Запуск предобработки
 ├── run_train_lstm.py        # Обучение LSTM (Lightning)
-├── pyproject.toml           # Poetry
-└── requirements.txt        # pip
+└── requirements.txt         # Зависимости (pip install -r requirements.txt)
 ```
 
 ## Данные
@@ -49,16 +48,10 @@ VKR/
 4. Ресэмплинг на 1 сек: интерполяция `route_frac`, `speed`, `accuracy` по времени; `lat`, `lon`, `bearing` — по геометрии маршрута в данной точке (повороты не сглаживаются).
 5. Сегменты и ETA: текущая/следующая остановка по положению вдоль маршрута (`route_frac`), id остановок из trass (`current_stop_id`, `next_stop_id`). ETA — время до достижения позиции следующей остановки по маршруту.
 
-Запуск (из корня проекта):
+Запуск (из корня проекта, с активированным conda env):
 
 ```bash
 python run_preprocess.py
-```
-
-Или с Poetry:
-
-```bash
-poetry run python run_preprocess.py
 ```
 
 Читает все CSV из `datasets/row_datasets/Novosibirsk/`, для каждого ищет `datasets/trasses/trasses_<маршрут>.json`, обрабатывает и сохраняет в `datasets/pre_datasets/Novosibirsk/<имя>_preprocessed.csv`. При отсутствии trass файл пропускается.
@@ -87,15 +80,19 @@ tensorboard --logdir logs
 
 В `config/train.yaml` задаются число эпох, lr, batch_size, val_frac, early stopping, путь к чекпоинтам и т.д.
 
-## Зависимости
+## Установка (Conda + pip)
 
 - Python 3.9+
-- **Poetry** (рекомендуется): `poetry install` из корня проекта. Зависимости описаны в `pyproject.toml`.
-- **pip**: `pip install -r requirements.txt`
+- Создай окружение и установи зависимости:
 
-Нужны: `torch`, `pytorch-lightning`, `tensorboard`, `PyYAML`, `pandas`, `numpy`.
+```bash
+conda create -n vkr python=3.10 -y
+conda activate vkr
+cd D:\!NGU!\4_year_2026\VKR
+pip install -r requirements.txt
+```
 
-Для ноутбуков с картой (folium) может потребоваться отдельная группа зависимостей (см. `pyproject.toml`).
+В `requirements.txt`: torch, pytorch-lightning, tensorboard, PyYAML, pandas, numpy, folium, matplotlib, markupsafe (для ноутбука с картой). Если при `import folium` ошибка про Markup/markupsafe — выполни: `pip install "markupsafe>=2.0,<2.1"`.
 
 ## Аномалии
 

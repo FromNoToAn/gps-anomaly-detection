@@ -18,6 +18,9 @@ RESAMPLE_INTERVAL_SEC = 1        # интерполяция на сетку 1 с
 STOP_DISTANCE_THRESHOLD_M = 25   # порог расстояния до остановки для ETA (метры)
 VEHICLE_TYPE = "bus"
 
+# Воспроизводимость обучения
+SEED = 42
+
 # LSTM
 WINDOW_SIZE_SEC = 60             # размер скользящего окна (секунды = число шагов при 1 сек)
 LSTM_HIDDEN_SIZE = 64

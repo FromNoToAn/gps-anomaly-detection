@@ -61,11 +61,19 @@ class ETALightningModule(pl.LightningModule):
         num_layers: int = LSTM_NUM_LAYERS,
         lr: float = 1e-3,
         eta_scale_sec: float = ETA_SCALE_SEC,
+        scheduler_factor: float = 0.5,
+        scheduler_patience: int = 4,
+        scheduler_min_lr: float = 1e-6,
+        scheduler_enabled: bool = True,
     ):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
         self.eta_scale_sec = eta_scale_sec
+        self.scheduler_enabled = scheduler_enabled
+        self.scheduler_factor = scheduler_factor
+        self.scheduler_patience = scheduler_patience
+        self.scheduler_min_lr = scheduler_min_lr
         self.model = LSTMEtaModel(hidden_size=hidden_size, num_layers=num_layers)
         self.criterion = MSELoss()
         self._val_preds: list = []
@@ -110,4 +118,22 @@ class ETALightningModule(pl.LightningModule):
         self._val_targets.clear()
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        if not self.scheduler_enabled:
+            return optimizer
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="min",
+            factor=self.scheduler_factor,
+            patience=self.scheduler_patience,
+            min_lr=self.scheduler_min_lr,
+        )
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "epoch",
+                "frequency": 1,
+                "monitor": "val_loss",
+            },
+        }

@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
 
-from src.config import ETA_SCALE_SEC, LSTM_HIDDEN_SIZE, LSTM_NUM_LAYERS
+from src.config import ETA_SCALE_SEC, LSTM_HIDDEN_SIZE, LSTM_NUM_LAYERS, SEED
 from src.models.dataset import ETAWindowDataset
 from src.models.lstm_model import LSTMEtaModel
 
@@ -63,12 +63,14 @@ def run_training(
 ):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch.manual_seed(SEED)
     full = ETAWindowDataset(preprocessed_dir=preprocessed_dir)
     if len(full) == 0:
         raise ValueError("No samples in preprocessed data. Run preprocessing first.")
     n_val = int(len(full) * val_frac)
     n_train = len(full) - n_val
-    train_ds, val_ds = random_split(full, [n_train, n_val])
+    gen = torch.Generator().manual_seed(SEED)
+    train_ds, val_ds = random_split(full, [n_train, n_val], generator=gen)
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
     val_loader = DataLoader(val_ds, batch_size=batch_size)
     model = LSTMEtaModel(hidden_size=LSTM_HIDDEN_SIZE, num_layers=LSTM_NUM_LAYERS).to(device)

@@ -5,3 +5,11 @@ tensorboard>=2.14
 PyYAML>=6.0
 pandas>=1.5
 numpy>=1.23
+
+# Для requests (убирает предупреждение)
+charset-normalizer>=3.0
+
+# Ноутбук с картой (datasets/map_track.ipynb): folium требует markupsafe < 2.1
+folium>=0.14.0
+matplotlib>=3.5.0
+markupsafe>=2.0,<2.1

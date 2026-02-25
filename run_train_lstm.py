@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.config import PRE_DATASETS_DIR
+from src.config import PRE_DATASETS_DIR, SEED
 from src.models.data_module import ETADataModule
 from src.models.lightning_module import ETALightningModule
 
@@ -30,7 +30,17 @@ def load_config(config_path: str | None) -> dict:
     """Загрузить YAML-конфиг или вернуть дефолты."""
     defaults = {
         "trainer": {"max_epochs": 50, "accelerator": "auto", "devices": 1},
-        "model": {"hidden_size": 64, "num_layers": 2, "lr": 1e-3},
+        "model": {
+            "hidden_size": 64,
+            "num_layers": 2,
+            "lr": 1e-3,
+            "scheduler": {
+                "enabled": True,
+                "factor": 0.5,
+                "patience": 4,
+                "min_lr": 1e-6,
+            },
+        },
         "data": {"batch_size": 32, "val_frac": 0.2, "num_workers": 0},
         "logging": {"name": "lstm_eta", "save_dir": "logs", "version": None},
         "checkpoint": {
@@ -62,20 +72,29 @@ def load_config(config_path: str | None) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description="Train LSTM ETA (Lightning)")
-    parser.add_argument("--config", "-c", type=str, default=None, help="Path to train.yaml")
+    parser.add_argument("--config", "-c", type=str, default=None, help="Path to train.yaml (default: config/train.yaml if exists)")
     parser.add_argument("--data_dir", type=str, default=PRE_DATASETS_DIR, help="Preprocessed CSV dir")
     args = parser.parse_args()
 
     config_path = Path(args.config) if args.config else None
-    if config_path and not config_path.is_absolute():
+    if config_path is None:
+        default_config = ROOT / "config" / "train.yaml"
+        if default_config.is_file():
+            config_path = default_config
+    elif config_path and not config_path.is_absolute():
         config_path = ROOT / config_path
     cfg = load_config(str(config_path) if config_path else None)
+    if config_path:
+        print(f"Config: {config_path}")
+    print(f"max_epochs: {cfg['trainer']['max_epochs']}, lr: {cfg['model']['lr']}, batch_size: {cfg['data']['batch_size']}")
     tcfg = cfg["trainer"]
     mcfg = cfg["model"]
     dcfg = cfg["data"]
     log_cfg = cfg["logging"]
     ckpt_cfg = cfg["checkpoint"]
     es_cfg = cfg["early_stopping"]
+
+    pl.seed_everything(SEED, workers=True)
 
     # DataModule
     data_dir = Path(args.data_dir)
@@ -89,10 +108,15 @@ def main():
     )
 
     # Model
+    sch = mcfg.get("scheduler") or {}
     model = ETALightningModule(
         hidden_size=mcfg["hidden_size"],
         num_layers=mcfg["num_layers"],
         lr=mcfg["lr"],
+        scheduler_enabled=sch.get("enabled", True),
+        scheduler_factor=sch.get("factor", 0.5),
+        scheduler_patience=sch.get("patience", 4),
+        scheduler_min_lr=sch.get("min_lr", 1e-6),
     )
 
     # Logger

@@ -3,7 +3,7 @@
 # С кастомным конфигом: python run_train_lstm.py --config config/train.yaml
 
 trainer:
-  max_epochs: 50
+  max_epochs: 140
   accelerator: auto
   devices: 1
   gradient_clip_val: 1.0
@@ -12,6 +12,12 @@ model:
   hidden_size: 64
   num_layers: 2
   lr: 0.001
+  # Scheduler: снижает lr при плато val_loss (сглаживает скачки)
+  scheduler:
+    enabled: true
+    factor: 0.5          # новый lr = lr * factor после patience эпох без улучшения
+    patience: 4          # эпох без улучшения val_loss
+    min_lr: 1.0e-6
 
 data:
   batch_size: 32

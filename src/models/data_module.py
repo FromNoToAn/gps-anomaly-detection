@@ -2,16 +2,17 @@
 """
 DataModule для ETA: загрузка данных и разбиение train/val для Lightning.
 """
+import torch
 from torch.utils.data import DataLoader, random_split
 
 import pytorch_lightning as pl
 
-from src.config import PRE_DATASETS_DIR, WINDOW_SIZE_SEC
+from src.config import PRE_DATASETS_DIR, SEED, WINDOW_SIZE_SEC
 from src.models.dataset import ETAWindowDataset
 
 
 class ETADataModule(pl.LightningDataModule):
-    """Датасет ETA с автоматическим train/val split."""
+    """Датасет ETA с автоматическим train/val split (фиксированный seed для воспроизводимости)."""
 
     def __init__(
         self,
@@ -19,6 +20,7 @@ class ETADataModule(pl.LightningDataModule):
         batch_size: int = 32,
         val_frac: float = 0.2,
         num_workers: int = 0,
+        seed: int = SEED,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -26,6 +28,7 @@ class ETADataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.val_frac = val_frac
         self.num_workers = num_workers
+        self.seed = seed
         self.full_dataset = None
         self.train_ds = None
         self.val_ds = None
@@ -41,8 +44,9 @@ class ETADataModule(pl.LightningDataModule):
             )
         n_val = int(len(self.full_dataset) * self.val_frac)
         n_train = len(self.full_dataset) - n_val
+        gen = torch.Generator().manual_seed(self.seed)
         self.train_ds, self.val_ds = random_split(
-            self.full_dataset, [n_train, n_val]
+            self.full_dataset, [n_train, n_val], generator=gen
         )
 
     def train_dataloader(self):

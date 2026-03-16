@@ -1,0 +1,47 @@
+# Конфиг обучения Informer/AutoInformer-подобной модели ETA
+# Запуск: python run_train_informer.py
+
+trainer:
+  max_epochs: 50
+  accelerator: auto
+  devices: 1
+  gradient_clip_val: 1.0
+
+model:
+  d_model: 128
+  nhead: 4
+  num_layers: 2
+  dim_feedforward: 256
+  dropout: 0.1
+  distill: true
+  lr: 0.001
+  scheduler:
+    enabled: true
+    factor: 0.5
+    patience: 4
+    min_lr: 1.0e-6
+
+data:
+  batch_size: 32
+  val_frac: 0.2
+  num_workers: 0
+
+logging:
+  name: informer_eta
+  save_dir: logs
+  version: null
+
+checkpoint:
+  dirpath: checkpoints
+  filename: "informer-eta-{epoch:02d}-{val_rmse_sec:.1f}"
+  monitor: val_loss
+  mode: min
+  save_top_k: 2
+  save_last: true
+
+early_stopping:
+  enabled: false
+  monitor: val_loss
+  patience: 10
+  mode: min
+

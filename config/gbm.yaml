@@ -1,0 +1,25 @@
+model:
+  type: xgboost
+
+  # Основное
+  n_estimators: 2000
+  learning_rate: 0.03
+  max_depth: 6
+  min_child_weight: 3.0
+
+  # Стабилизация и обобщение
+  subsample: 0.8
+  colsample_bytree: 0.7
+
+  reg_lambda: 2.0
+  reg_alpha: 0.0
+
+data:
+  val_frac: 0.2
+
+logging:
+  name: gbm_eta
+  save_dir: logs
+  version: null
+
+seed: 42

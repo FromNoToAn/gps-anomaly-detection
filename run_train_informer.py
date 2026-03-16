@@ -1,0 +1,178 @@
+# -*- coding: utf-8 -*-
+"""
+Обучение Informer/AutoInformer-подобной модели ETA на PyTorch Lightning.
+
+Предобработка:  python run_preprocess.py
+Обучение:       python run_train_informer.py
+С конфигом:     python run_train_informer.py --config config/informer.yaml
+TensorBoard:    tensorboard --logdir logs
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import pytorch_lightning as pl
+from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.loggers import TensorBoardLogger
+
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.config import PRE_DATASETS_DIR, SEED
+from src.models.data_module import ETADataModule
+from src.models.informer_lightning_module import ETAInformerLightningModule
+
+
+def load_config(config_path: str | None) -> dict:
+    defaults = {
+        "trainer": {"max_epochs": 50, "accelerator": "auto", "devices": 1},
+        "model": {
+            "d_model": 128,
+            "nhead": 4,
+            "num_layers": 2,
+            "dim_feedforward": 256,
+            "dropout": 0.1,
+            "distill": True,
+            "lr": 1e-3,
+            "scheduler": {"enabled": True, "factor": 0.5, "patience": 4, "min_lr": 1e-6},
+        },
+        "data": {"batch_size": 32, "val_frac": 0.2, "num_workers": 0},
+        "logging": {"name": "informer_eta", "save_dir": "logs", "version": None},
+        "checkpoint": {
+            "dirpath": "checkpoints",
+            "filename": "informer-eta-{epoch:02d}-{val_rmse_sec:.1f}",
+            "monitor": "val_loss",
+            "mode": "min",
+            "save_top_k": 2,
+            "save_last": True,
+        },
+        "early_stopping": {"enabled": False, "monitor": "val_loss", "patience": 10, "mode": "min"},
+    }
+    if not config_path or not Path(config_path).is_file():
+        return defaults
+    try:
+        import yaml
+
+        with open(config_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        for k, v in (cfg or {}).items():
+            if k in defaults and isinstance(v, dict) and isinstance(defaults[k], dict):
+                defaults[k] = {**defaults[k], **v}
+            else:
+                defaults[k] = v
+    except Exception as e:
+        print(f"Warning: could not load config {config_path}: {e}")
+    return defaults
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Train Informer ETA (Lightning)")
+    parser.add_argument("--config", "-c", type=str, default=None, help="Path to informer.yaml (default: config/informer.yaml if exists)")
+    parser.add_argument("--data_dir", type=str, default=PRE_DATASETS_DIR, help="Preprocessed CSV dir")
+    args = parser.parse_args()
+
+    config_path = Path(args.config) if args.config else None
+    if config_path is None:
+        default_config = ROOT / "config" / "informer.yaml"
+        if default_config.is_file():
+            config_path = default_config
+    elif config_path and not config_path.is_absolute():
+        config_path = ROOT / config_path
+
+    cfg = load_config(str(config_path) if config_path else None)
+    if config_path:
+        print(f"Config: {config_path}")
+    print(
+        "informer "
+        f"max_epochs={cfg['trainer']['max_epochs']} "
+        f"lr={cfg['model']['lr']} "
+        f"batch_size={cfg['data']['batch_size']} "
+        f"d_model={cfg['model']['d_model']} layers={cfg['model']['num_layers']} heads={cfg['model']['nhead']}"
+    )
+
+    tcfg = cfg["trainer"]
+    mcfg = cfg["model"]
+    dcfg = cfg["data"]
+    log_cfg = cfg["logging"]
+    ckpt_cfg = cfg["checkpoint"]
+    es_cfg = cfg["early_stopping"]
+
+    pl.seed_everything(SEED, workers=True)
+
+    data_dir = Path(args.data_dir)
+    if not data_dir.is_dir():
+        raise SystemExit(f"Data dir not found: {data_dir}. Run: python run_preprocess.py")
+
+    dm = ETADataModule(
+        preprocessed_dir=str(data_dir),
+        batch_size=dcfg["batch_size"],
+        val_frac=dcfg["val_frac"],
+        num_workers=dcfg["num_workers"],
+        seed=SEED,
+    )
+
+    sch = mcfg.get("scheduler") or {}
+    model = ETAInformerLightningModule(
+        d_model=mcfg["d_model"],
+        nhead=mcfg["nhead"],
+        num_layers=mcfg["num_layers"],
+        dim_feedforward=mcfg["dim_feedforward"],
+        dropout=mcfg["dropout"],
+        distill=mcfg.get("distill", True),
+        lr=mcfg["lr"],
+        scheduler_enabled=sch.get("enabled", True),
+        scheduler_factor=sch.get("factor", 0.5),
+        scheduler_patience=sch.get("patience", 4),
+        scheduler_min_lr=sch.get("min_lr", 1e-6),
+    )
+
+    log_dir = ROOT / log_cfg["save_dir"]
+    logger = TensorBoardLogger(
+        save_dir=str(log_dir),
+        name=log_cfg["name"],
+        version=log_cfg.get("version"),
+    )
+
+    ckpt_dir = ROOT / ckpt_cfg["dirpath"]
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    callbacks = [
+        ModelCheckpoint(
+            dirpath=str(ckpt_dir),
+            filename=ckpt_cfg["filename"],
+            monitor=ckpt_cfg["monitor"],
+            mode=ckpt_cfg["mode"],
+            save_top_k=ckpt_cfg["save_top_k"],
+            save_last=ckpt_cfg["save_last"],
+            verbose=True,
+        ),
+    ]
+    if es_cfg.get("enabled"):
+        callbacks.append(
+            EarlyStopping(
+                monitor=es_cfg["monitor"],
+                patience=es_cfg["patience"],
+                mode=es_cfg["mode"],
+                verbose=True,
+            )
+        )
+
+    trainer = pl.Trainer(
+        max_epochs=tcfg["max_epochs"],
+        accelerator=tcfg.get("accelerator", "auto"),
+        devices=tcfg.get("devices", 1),
+        gradient_clip_val=tcfg.get("gradient_clip_val"),
+        logger=logger,
+        callbacks=callbacks,
+    )
+
+    trainer.fit(model, datamodule=dm)
+    print(f"Checkpoints: {ckpt_dir}")
+    print(f"TensorBoard: tensorboard --logdir {log_dir}")
+
+
+if __name__ == "__main__":
+    main()
+

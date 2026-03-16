@@ -3,7 +3,7 @@
 # С кастомным конфигом: python run_train_lstm.py --config config/train.yaml
 
 trainer:
-  max_epochs: 140
+  max_epochs: 150
   accelerator: auto
   devices: 1
   gradient_clip_val: 1.0

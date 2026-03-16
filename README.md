@@ -7,7 +7,9 @@
 ```
 VKR/
 ├── config/
-│   └── train.yaml          # Параметры обучения (эпохи, lr, early stopping и т.д.)
+│   ├── train.yaml          # Параметры обучения LSTM (эпохи, lr, scheduler и т.д.)
+│   ├── gbm.yaml            # Параметры обучения GBM (XGBoost)
+│   └── informer.yaml       # Параметры обучения Informer-подобной модели
 ├── datasets/
 │   ├── row_datasets/Novosibirsk/   # Исходные CSV поездок (time, lat, lon, accuracy, bearing, speed)
 │   ├── trasses/                     # Маршруты: trasses_38.json, trasses_52.json, trasses_72.json
@@ -26,11 +28,17 @@ VKR/
 │   │   ├── dataset.py       # Скользящие окна 60 сек, признаки: lat, lon, accuracy, bearing, speed
 │   │   ├── lstm_model.py    # LSTM → линейный слой → ETA (масштабировано)
 │   │   ├── lightning_module.py # PyTorch Lightning (train/val, логирование)
+│   │   ├── informer_model.py # Informer/AutoInformer-подобная модель (пример)
+│   │   └── informer_lightning_module.py # Lightning-модуль для informer модели
 │   │   ├── data_module.py   # DataModule: загрузка, train/val split, DataLoader
 │   │   └── train.py         # train_epoch / evaluate (без Lightning)
 │   └── anomaly.py           # Флаг аномалии: |pred_ETA − actual_ETA| > порог (120 сек)
 ├── run_preprocess.py        # Запуск предобработки
 ├── run_train_lstm.py        # Обучение LSTM (Lightning)
+├── run_train_gbm.py         # Обучение GBM (XGBoost)
+├── run_train_informer.py    # Обучение informer-подобной модели (Lightning)
+├── README_GBM.md            # Документация по GBM
+├── README_INFORMER.md       # Документация по informer модели
 └── requirements.txt         # Зависимости (pip install -r requirements.txt)
 ```
 
@@ -79,6 +87,34 @@ tensorboard --logdir logs
 ```
 
 В `config/train.yaml` задаются число эпох, lr, batch_size, val_frac, early stopping, путь к чекпоинтам и т.д.
+
+## Альтернативные модели (для сравнения)
+
+### GBM (XGBoost)
+
+Обучение градиентного бустинга на тех же окнах, что и LSTM (каждое окно `[T, F]` сплющивается в вектор `[T*F]`).
+
+```bash
+python run_train_gbm.py
+```
+
+Конфиг: `config/gbm.yaml`  
+Документация: `README_GBM.md`  
+Логи: `logs/gbm_eta/`  
+Артефакт модели: `checkpoints/gbm_eta.xgb`
+
+### Informer/AutoInformer‑подобная модель (пример)
+
+Transformer Encoder по мотивам Informer (positional encoding + лёгкий distilling Conv1d со stride=2).
+
+```bash
+python run_train_informer.py
+```
+
+Конфиг: `config/informer.yaml`  
+Документация: `README_INFORMER.md`  
+Логи: `logs/informer_eta/`  
+Чекпоинты: `checkpoints/` (имя задаётся в `config/informer.yaml`)
 
 ## Установка (Conda + pip)
 
